@@ -2,8 +2,8 @@ import calendar
 import configparser
 import os
 from datetime import datetime
-
-from swiggy_analytics.constants import CONFIG_FILEPATH
+from exceptions import SwiggyCliConfigError
+from constants import CONFIG_FILEPATH
 
 
 

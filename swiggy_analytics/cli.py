@@ -5,8 +5,8 @@ from prompt_toolkit.completion import WordCompleter
 from prompt_toolkit.shortcuts import button_dialog, input_dialog
 from prompt_toolkit.validation import ValidationError, Validator
 
-from swiggy_analytics.constants import NO_ANSWER_CHOICES, YES_ANSWER_CHOICES
-from swiggy_analytics.exceptions import SwiggyCliQuitError
+from constants import NO_ANSWER_CHOICES, YES_ANSWER_CHOICES
+from exceptions import SwiggyCliQuitError
 
 
 class YesNoValidator(Validator):

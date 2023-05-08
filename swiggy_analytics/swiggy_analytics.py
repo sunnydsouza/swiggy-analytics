@@ -14,14 +14,14 @@ import argparse
 import os
 import sys
 
-from swiggy_analytics.cli import user_continue
-from swiggy_analytics.constants import DB_FILEPATH
-from swiggy_analytics.db import SwiggyDB
-from swiggy_analytics.exceptions import (SwiggyAPIError, SwiggyCliAuthError,
+from cli import user_continue
+from constants import DB_FILEPATH
+from db import SwiggyDB
+from exceptions import (SwiggyAPIError, SwiggyCliAuthError,
                                          SwiggyCliConfigError)
-from swiggy_analytics.helper import (display_stats, fetch_and_store_orders,
+from helper import (display_stats, fetch_and_store_orders,
                                      initial_setup_prompt, perform_login)
-from swiggy_analytics.utils import config_file_present
+from utils import config_file_present
 
 
 def main():

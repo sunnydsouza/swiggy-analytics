@@ -9,25 +9,25 @@ from prompt_toolkit import print_formatted_text
 from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.shortcuts import ProgressBar
 
-from swiggy_analytics.cli import get_input_value, print_bars, quit_prompt
-from swiggy_analytics.constants import (PROGRESS_BAR_FORMATTER,
-                                        PROGRESS_BAR_STYLE,
-                                        SWIGGY_API_CALL_INTERVAL,
-                                        SWIGGY_LOGIN_URL, SWIGGY_ORDER_URL,
-                                        SWIGGY_SEND_OTP_URL, SWIGGY_URL,
-                                        SWIGGY_VERIFY_OTP_URL)
-from swiggy_analytics.db import SwiggyDB
-from swiggy_analytics.exceptions import (SwiggyAPIError, SwiggyCliAuthError,
-                                         SwiggyCliConfigError,
-                                         SwiggyCliQuitError, SwiggyDBError)
-from swiggy_analytics.queries import (get_items_name_count_query,
-                                      get_monthly_spend_count,
-                                      get_order_count_day_of_week,
-                                      get_top_20_restaurants_query,
-                                      get_total_amount_query,
-                                      get_total_orders_query)
-from swiggy_analytics.utils import (format_amount, get_config, get_month,
-                                    get_scores, get_weekday_name, save_config)
+from cli import get_input_value, print_bars, quit_prompt
+from constants import (PROGRESS_BAR_FORMATTER,
+                       PROGRESS_BAR_STYLE,
+                       SWIGGY_API_CALL_INTERVAL,
+                       SWIGGY_LOGIN_URL, SWIGGY_ORDER_URL,
+                       SWIGGY_SEND_OTP_URL, SWIGGY_URL,
+                       SWIGGY_VERIFY_OTP_URL)
+from db import SwiggyDB
+from exceptions import (SwiggyAPIError, SwiggyCliAuthError,
+                        SwiggyCliConfigError,
+                        SwiggyCliQuitError, SwiggyDBError)
+from queries import (get_items_name_count_query,
+                     get_monthly_spend_count,
+                     get_order_count_day_of_week,
+                     get_top_20_restaurants_query,
+                     get_total_amount_query,
+                     get_total_orders_query)
+from utils import (format_amount, get_config, get_month,
+                   get_scores, get_weekday_name, save_config)
 
 session = requests.Session()
 
@@ -80,7 +80,10 @@ def fetch_orders(offset_id):
     """
     try:
         response = session.get(
-            SWIGGY_ORDER_URL + '?order_id=' + str(offset_id))
+            SWIGGY_ORDER_URL + '?order_id=' + str(offset_id), headers={
+                'User-Agent': "Mozilla/Gecko/Firefox/65.0",
+                "Content-Type": "application/json"
+            }, data={})
     except requests.exceptions.ConnectionError:
         fetch_orders(offset_id)
     except Exception as e:
@@ -111,14 +114,20 @@ def perform_login():
     maintain the cookies in the same session object, which is used
     for further calls.
     """
-    establish_connection = session.get(SWIGGY_URL)
-    # This is the most ugliest parsing I have ever written. Don't @ me
-    csrf_token = establish_connection.text.split("csrfToken")[1].split("=")[
-        1].split(";")[0][2:-1]
+
+    establish_connection = session.get(
+        SWIGGY_LOGIN_URL, headers={
+            'User-Agent': "Mozilla/Gecko/Firefox/65.0",
+            "Content-Type": "application/json"
+        }, data={})
+    json_response = establish_connection.json()
+    print(json_response)
+    csrf_token = json_response["csrfToken"]
     # Trying to act smart eh, swiggy? ;)
     sw_cookie = establish_connection.cookies.get_dict().get('__SW')
     if not csrf_token or not sw_cookie:
-        raise SwiggyCliAuthError("Unable to establish connection with the website. Login failed")
+        raise SwiggyCliAuthError(
+            "Unable to establish connection with the website. Login failed")
     # fetch username from config
     try:
         username = get_config()
@@ -126,27 +135,32 @@ def perform_login():
         raise e
     # send OTP request
 
-    otp_response = session.post(SWIGGY_SEND_OTP_URL, headers={'content-type': 'application/json',
-                                                              'Cookie':'__SW={}'.format(sw_cookie),
+    otp_response = session.post(SWIGGY_SEND_OTP_URL, headers={'Content-Type': 'application/json',
+                                                              'Cookie': '__SW={}'.format(sw_cookie),
                                                               'User-Agent': 'Mozilla/Gecko/Firefox/65.0'
-                                                            },
-                                  json={"mobile": username, '_csrf': csrf_token})
+                                                              },
+                                json={"mobile": username, '_csrf': csrf_token})
     # Swiggy APIs send 200 for error responses, so cannot do a status check.
-    if otp_response== "Invalid Request":
+    if otp_response == "Invalid Request":
         raise SwiggyCliAuthError(
             "Error from Swiggy API while sending OTP")
     # Get the new csrf token
-    re_establish_connection = session.get(SWIGGY_URL)
-    # This is the most ugliest parsing I have ever written. Don't @ me
-    csrf_token = re_establish_connection.text.split("csrfToken")[1].split("=")[
-        1].split(";")[0][2:-1]
+    re_establish_connection = session.get(
+        SWIGGY_LOGIN_URL, headers={
+            'User-Agent': "Mozilla/Gecko/Firefox/65.0",
+            "Content-Type": "application/json"
+        }, data={})
+
+    json_response = re_establish_connection.json()
+    print(json_response)
+    csrf_token = json_response["csrfToken"]
     # prompt for OTP
     otp_input = get_input_value(title='Verify OTP',
                                 text='Please enter the OTP sent to your registered mobile number {}'.format(username))
 
-    otp_verify_response = session.post(SWIGGY_VERIFY_OTP_URL, headers={'content-type': 'application/json',
-                                                             'User-Agent': 'Mozilla/Gecko/Firefox/65.0'},
-                                  json={"otp": otp_input, '_csrf': csrf_token})
+    otp_verify_response = session.post(SWIGGY_VERIFY_OTP_URL, headers={'Content-Type': 'application/json',
+                                                                       'User-Agent': 'Mozilla/Gecko/Firefox/65.0'},
+                                       json={"otp": otp_input, '_csrf': csrf_token})
 
     if otp_verify_response.text == "Invalid Request":
         perform_login()
@@ -178,14 +192,18 @@ def fetch_and_store_orders(db):
     """
     Fetches all the historical orders for the user and saves them in db
     """
-    response = session.get(SWIGGY_ORDER_URL)
+    response = session.get(SWIGGY_ORDER_URL, headers={
+        'User-Agent': "Mozilla/Gecko/Firefox/65.0",
+        "Content-Type": "application/json"
+    }, data={})
+    print(response.json())
     if not response.json().get('data', None):
         raise SwiggyAPIError("Unable to fetch orders")
 
     # get the last order_id to use as offset param for next order fetch call
     orders = response.json().get('data').get('orders', None)
     # check if user has zero orders
-    if isinstance(orders, list) and len(orders)==0:
+    if isinstance(orders, list) and len(orders) == 0:
         sys.exit("You have not placed any order, no data to fetch :)")
     if not orders:
         raise SwiggyAPIError("Unable to fetch orders")
@@ -232,14 +250,14 @@ def display_stats(db):
     try:
         orders_count = db.fetch_result(query=get_total_orders_query)[0][0]
     except SwiggyDBError as e:
-        raise("Error while fetching total orders count {}".format(e))
+        raise ("Error while fetching total orders count {}".format(e))
     print_formatted_text(HTML(
         '\nYour total <b>delivered</b> orders are: <skyblue>{}</skyblue>\n'.format(orders_count)))
 
     try:
         total_amount = db.fetch_result(query=get_total_amount_query)[0][0]
     except SwiggyDBError as e:
-        raise("Error while fetching total amount {}".format(e))
+        raise ("Error while fetching total amount {}".format(e))
     print_formatted_text(HTML(
         'You have spent a total sum of <skyblue>{}</skyblue>'.format(format_amount(total_amount))))
 
@@ -250,7 +268,7 @@ def display_stats(db):
         items_count_bar_graph = db.fetch_result(
             query=get_monthly_spend_count)
     except SwiggyDBError as e:
-        raise("Error while fetching items v/s count {}".format(e))
+        raise ("Error while fetching items v/s count {}".format(e))
     print_bars(get_scores([{"name": get_month(i[0]), "count":i[2], "extra":format_amount(i[1])}
                            for i in items_count_bar_graph]))
 
@@ -261,7 +279,7 @@ def display_stats(db):
         weekday_count_bar_graph = db.fetch_result(
             query=get_order_count_day_of_week)
     except SwiggyDBError as e:
-        raise("Error while fetching total orders v/s weekday data {}".format(e))
+        raise ("Error while fetching total orders v/s weekday data {}".format(e))
 
     print_bars(get_scores([{"name": get_weekday_name(i[0]), "count":i[1]}
                            for i in weekday_count_bar_graph]))
@@ -273,7 +291,7 @@ def display_stats(db):
         items_count_bar_graph = db.fetch_result(
             query=get_top_20_restaurants_query)
     except SwiggyDBError as e:
-        raise("Error while fetching items v/s count {}".format(e))
+        raise ("Error while fetching items v/s count {}".format(e))
     print_bars(get_scores([{"name": i[0], "count":i[1]}
                            for i in items_count_bar_graph]))
     # topK items
@@ -283,6 +301,6 @@ def display_stats(db):
         items_count_bar_graph = db.fetch_result(
             query=get_items_name_count_query)
     except SwiggyDBError as e:
-        raise("Error while fetching items v/s count {}".format(e))
+        raise ("Error while fetching items v/s count {}".format(e))
     print_bars(get_scores([{"name": i[0], "count":i[1]}
                            for i in items_count_bar_graph]))

@@ -16,3 +16,6 @@ class SwiggyAPIError(Exception):
 
 class SwiggyDBError(Exception):
     pass
+
+class SwiggyCliDBException(Exception):
+    pass

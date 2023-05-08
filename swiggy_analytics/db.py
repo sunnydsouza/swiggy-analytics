@@ -1,8 +1,8 @@
 import sqlite3
 
-from swiggy_analytics.constants import DB_FILEPATH
-from swiggy_analytics.exceptions import SwiggyDBError
-from swiggy_analytics.queries import (create_items_table_query,
+from constants import DB_FILEPATH
+from exceptions import SwiggyDBError, SwiggyCliDBException
+from queries import (create_items_table_query,
                                       create_orders_table_query,
                                       insert_items_query, insert_orders_query)
 
